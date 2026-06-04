@@ -1,13 +1,58 @@
-<script>
-	import { Calendar, TimeGrid, DayGrid } from '@event-calendar/core';
+<script lang="ts">
+	import BluePrintForm from '$lib/BluePrintForm.svelte';
+	import SandboxForm from '$lib/SandboxForm.svelte';
+	import {
+		blueprintToEvents,
+		type BlueprintInput,
+		type CalendarEventInput
+	} from '$lib/models/coursePlan';
+	// @ts-expect-error: package does not currently ship TypeScript declarations
+	import { Calendar, DayGrid, Interaction } from '@event-calendar/core';
 
-	let activeForm = $state('blueprint');
+	let sandboxMode = $state(false);
+	let events = $state<CalendarEventInput[]>([]);
+
+	function handleBlueprintSubmit(input: BlueprintInput): void {
+		events = blueprintToEvents(input);
+	}
+
+	function handleEventDrop(info: { event: { id: string | number; start: Date | null } }): void {
+		if (!info.event.start) {
+			return;
+		}
+		const droppedDate = info.event.start;
+
+		events = events.map((event) =>
+			event.id === String(info.event.id)
+				? {
+						...event,
+						start: droppedDate,
+						extendedProps: {
+							...event.extendedProps,
+							dueDate: toDateString(droppedDate)
+						}
+					}
+				: event
+		);
+	}
+
+	function toDateString(date: Date): string {
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		return `${year}-${month}-${day}`;
+	}
 
 	let options = $state({
 		view: 'dayGridMonth',
-		events: [
-			// your list of events
-		]
+		eventStartEditable: true,
+		eventDurationEditable: false,
+		eventDrop: handleEventDrop,
+		events: [] as CalendarEventInput[]
+	});
+
+	$effect(() => {
+		options.events = events;
 	});
 </script>
 
@@ -16,68 +61,28 @@
 <div class="grid gap-8 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start">
 	<div class="m-6">
 		<div>
-			<button class="border" onclick={() => (activeForm = 'blueprint')}> Blueprint Mode </button>
-			<button class="border" onclick={() => (activeForm = 'sandbox')}> Sandbox Mode </button>
+			<button
+				class="border {sandboxMode ? '' : 'bg-gray-500 text-white'}"
+				onclick={() => (sandboxMode = false)}
+			>
+				Blueprint Mode
+			</button>
+			<button
+				class="border {sandboxMode ? 'bg-gray-500 text-white' : ''}"
+				onclick={() => (sandboxMode = true)}
+			>
+				Sandbox Mode
+			</button>
 		</div>
-		{#if activeForm === 'blueprint'}
-			<!-- TODO send this to a component -->
-			<!-- Blueprint mode -->
-			<form class="space-y-5 border p-3">
-				<div>
-					<label for="class">Class name:</label>
-					<input class=" w-full" type="text" id="class" name="class" required />
-				</div>
-
-				<div class="grid gap-4 sm:grid-cols-2">
-					<div>
-						<label for="start-date">Start Date:</label>
-						<input class="w-full" type="date" id="start-date" name="start-date" required />
-					</div>
-
-					<div>
-						<label for="end-date">End Date:</label>
-						<input class=" w-full" type="date" id="end-date" name="end-date" required />
-					</div>
-				</div>
-
-				<div>
-					<label for="modules">Modules:</label>
-					<input class="w-full" type="number" id="modules" name="modules" required />
-				</div>
-
-				<div class="bg-slate-50 p-2">
-					<h3>Breaks</h3>
-					<p class="text-xs text-slate-500">
-						Enter any holidays or breaks you would like to schedule around.
-					</p>
-					<div class="grid gap-4 sm:grid-cols-2">
-						<!-- TODO make this repeatable, so you can add multiple breaks -->
-						<div>
-							<label for="break-start">Start:</label>
-							<input class="block w-full text-sm" type="date" id="break-start" name="break-start" />
-						</div>
-						<div>
-							<label for="break-end">End:</label>
-							<input class="block w-full text-sm" type="date" id="break-end" name="break-end" />
-						</div>
-					</div>
-				</div>
-				<div>
-					<h3>Model Outline</h3>
-					<p>Describe content of each module:</p>
-					<!-- TODO: Implement model outline, needs to be a repeatable component -->
-				</div>
-			</form>
+		{#if !sandboxMode}
+			<BluePrintForm onBlueprintSubmit={handleBlueprintSubmit} />
 		{:else}
-			<!-- Sandbox mode -->
-			<form>
-				<h3>Coming Soon...</h3>
-			</form>
+			<SandboxForm />
 		{/if}
 	</div>
 
 	<div class="m-6 overflow-hidden border p-3">
-		<Calendar plugins={[DayGrid]} {options} />
+		<Calendar plugins={[DayGrid, Interaction]} {options} />
 	</div>
 </div>
 
